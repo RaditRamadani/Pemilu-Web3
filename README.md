@@ -80,6 +80,44 @@ dirantai.
 5. Siapa pun bisa mengunduh record mentah, menghitung ulang total, dan
    membandingkannya dengan rolling root on-chain.
 
+## Manfaat
+
+**1. Hasil bisa dipantau tanpa menunggu sebulan.**
+Tally berjalan sejak TPS pertama melapor, dan selalu ditampilkan bersama
+persentase TPS yang sudah masuk — jadi angka awal tidak bisa dibaca sebagai
+hasil akhir.
+
+**2. Perubahan angka jadi bukti, bukan tuduhan.**
+Kalau sebuah angka berbeda antara tingkat TPS dan tingkat kecamatan, selisihnya
+terlihat dan bisa ditunjuk. Tuduhan "diam-diam diubah" berubah dari spekulasi
+menjadi hal yang bisa diperiksa.
+
+**3. Verifikasi tidak perlu izin.**
+Siapa pun bisa mengunduh record mentah dan menghitung ulang total nasional
+sendiri. Tidak perlu akun, tidak perlu menjadi lembaga, tidak perlu percaya KPU.
+
+**4. Koreksi justru menambah kepercayaan.**
+Karena koreksi tercatat sebagai entri baru, riwayat revisi terbuka. Yang di
+sistem lain tampak seperti manipulasi, di sini tampak seperti transparansi.
+
+**5. Data tidak valid tidak bisa masuk sama sekali.**
+Invariant ditegakkan saat penulisan, bukan dicek belakangan. Ini juga melindungi
+penyelenggara: kesalahan hitung administratif tertangkap di sumber, sebelum
+menjadi isu nasional.
+
+**6. Tidak butuh perangkat baru.**
+Pencatatan memakai HP saksi yang sudah ada di TPS. Tidak ada pengadaan perangkat
+nasional, tidak ada instalasi di 820 ribu titik.
+
+**7. Sengketa punya satu sumber kebenaran.**
+Semua pihak — KPU, Bawaslu, saksi, publik — membaca record yang sama. Sengketa
+bergeser dari "versi siapa yang benar" menjadi "record ini cocok atau tidak
+dengan hash-nya".
+
+> Ini sifat-sifat dari desainnya, bukan hasil pengukuran. Status proyek masih
+> spesifikasi; klaim manfaat baru boleh dianggap terbukti setelah prototipe dan
+> pengujian ada.
+
 ## Komponen
 
 | Komponen | Tanggung jawab |
