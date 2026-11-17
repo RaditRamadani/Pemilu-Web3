@@ -1,112 +1,116 @@
 # Pemilu Web3
 
-**An auditable tally for Indonesian election recapitulation.**
-Every polling-station result is signed by witnesses, recorded append-only, and
-hashed on-chain — so anyone can recompute the national total without trusting
-the authority that published it.
+**Tally pemilu Indonesia yang bisa diaudit siapa pun.**
+Setiap hasil TPS ditandatangani saksi, dicatat secara append-only, dan di-hash
+on-chain — sehingga siapa pun bisa menghitung ulang total nasional tanpa harus
+mempercayai pihak yang menerbitkannya.
 
-> **Status:** design + specification. The contracts and dashboard are specified
-> below and are next on the roadmap. No working prototype yet.
+> **Status:** desain + spesifikasi. Kontrak dan dashboard dijelaskan di bawah dan
+> menjadi langkah berikutnya di roadmap. Belum ada prototipe yang berjalan.
 
 ---
 
-## The problem
+## Masalahnya
 
-Indonesian election results stay unofficial for weeks after voting day. In the
-2024 election (~204 million registered voters, ~820,000 polling stations), the
-official recapitulation took roughly a month. That gap is filled with
-screenshots, premature victory claims, and hoaxes — not because the count is
-wrong, but because there is no way for the public to *check* it.
+Hasil pemilu Indonesia tetap berstatus tidak resmi selama berminggu-minggu
+setelah hari pencoblosan. Pada Pemilu 2024 (sekitar 204 juta pemilih terdaftar,
+sekitar 820 ribu TPS), rekapitulasi resmi memakan waktu kira-kira satu bulan.
+Jeda itu diisi dengan tangkapan layar, klaim kemenangan sepihak, dan hoaks —
+bukan karena hitungannya salah, tapi karena publik tidak punya cara untuk
+**memeriksanya**.
 
-The recognised attack surface is not the database. It is the step where numbers
-travel upward: **TPS → kecamatan → kabupaten → national**. A number that changes
-at any of those hops is hard to prove and easy to allege.
+Titik rawan yang diakui bukanlah basis datanya. Titik rawan adalah saat angka
+bergerak naik: **TPS → kecamatan → kabupaten → nasional**. Angka yang berubah di
+salah satu lompatan itu sulit dibuktikan dan mudah dituduhkan.
 
-Existing efforts (Kawal Suara, quick counts) proved that *speed* is achievable.
-What is still missing is **integrity that a stranger can verify**.
+Upaya yang sudah ada (Kawal Suara, quick count) membuktikan bahwa **kecepatan**
+bisa dicapai. Yang belum ada adalah **integritas yang bisa diverifikasi orang
+asing**.
 
-## What this is
+## Apa itu proyek ini
 
-A tally that is:
+Sebuah tally yang:
 
-- **Append-only** — a correction is a new entry, never an overwrite.
-- **Signed at the source** — KPU officer plus witnesses, not a single uploader.
-- **Anchored** — a rolling hash is written to a public chain, so history cannot
-  be rewritten by the authority that owns the data.
-- **Recomputable** — a public verifier derives the total from raw records.
+- **Append-only** — koreksi adalah entri baru, tidak pernah menimpa.
+- **Ditandatangani di sumber** — petugas KPU plus saksi, bukan satu pengunggah.
+- **Di-anchor** — rolling hash ditulis ke chain publik, sehingga sejarah tidak
+  bisa ditulis ulang oleh pihak yang memiliki datanya.
+- **Bisa dihitung ulang** — verifier publik menurunkan total dari record mentah.
 
-## What this is not
+## Apa yang bukan
 
-- **Not e-voting.** Paper ballots and manual counting at the TPS stay exactly as
-  they are. This is the single most important constraint: ballot secrecy in a
-  booth is a *security feature*, not a legacy limitation.
-- **Not an official result.** KPU's manual recapitulation remains authoritative.
-  This produces an *auditable tally*, labelled unofficial, published alongside.
-- **Not a fix for vote buying.** See [Non-goals](#non-goals).
+- **Bukan e-voting.** Surat suara kertas dan hitung manual di TPS tetap seperti
+  sekarang. Ini batasan terpenting: kerahasiaan bilik suara adalah **fitur
+  keamanan**, bukan keterbatasan warisan.
+- **Bukan hasil resmi.** Rekapitulasi manual KPU tetap menjadi acuan. Proyek ini
+  menghasilkan *tally yang bisa diaudit*, berlabel belum resmi, dipublikasikan
+  berdampingan.
+- **Bukan solusi politik uang.** Lihat [Yang Bukan Tujuan Proyek](#yang-bukan-tujuan-proyek).
 
-## Design principle
+## Prinsip desain
 
-> **Nobody reports the total. The contract computes it.**
+> **Tidak ada yang melaporkan total. Kontrak yang menghitungnya.**
 
-There is no `setNationalTotal()` anywhere in this design. The national figure
-is a derived value, a function of the record set. You cannot alter a derived
-value without altering the records, and every record is signed and chained.
+Tidak ada `setNationalTotal()` di mana pun dalam desain ini. Angka nasional
+adalah nilai turunan, fungsi dari kumpulan record. Kamu tidak bisa mengubah nilai
+turunan tanpa mengubah record-nya, dan setiap record ditandatangani serta
+dirantai.
 
-## How it works
+## Cara kerjanya
 
 ```
-  TPS                 Ingestor                 Ledger (EVM)            Public
+  TPS                 Ingestor                 Ledger (EVM)            Publik
   ───────────────────────────────────────────────────────────────────────────
-  count C-hasil  ───►  hash photo        ───►  submitResult()   ───►  dashboard
-  signed by KPU        + numbers               ├ invariant check      ├ live tally
-  + 2 witnesses        + witness sigs          ├ revert if invalid    └ verify TPS
-                                               ├ tally += votes
-                                               └ rollingRoot = H(prev, rec)
+  hitung C-hasil ───►  hash foto        ───►  submitResult()   ───►  dashboard
+  ditandatangani       + angka               ├ cek invariant       ├ tally live
+  KPU + 2 saksi        + tanda tangan saksi  ├ revert jika salah   └ verifikasi TPS
+                                             ├ tally += suara
+                                             └ rollingRoot = H(prev, rec)
 ```
 
-1. The TPS counts paper ballots and fills in the C-hasil form, signed by hand as
-   it is today.
-2. The KPU officer and each witness photograph **the same form** through the
-   ingestor app — offline-first, synced when there is signal. Each copy is an
-   independent observation.
-3. The ingestor hashes the photo and submits the numbers with witness
-   signatures. An invalid record reverts.
-4. The dashboard shows a running tally, always with a **reporting-coverage
-   denominator** (e.g. `42,318 / 820,000 TPS reporting — 5.2%`).
-5. Anyone can download the raw records, recompute the total, and compare it with
-   the on-chain rolling root.
+1. TPS menghitung surat suara kertas dan mengisi formulir C-hasil, ditandatangani
+   basah seperti sekarang.
+2. Petugas KPU dan tiap saksi memotret **formulir yang sama** lewat aplikasi
+   ingestor — offline-first, tersinkron saat ada sinyal. Tiap salinan adalah
+   pengamatan independen.
+3. Ingestor meng-hash foto dan mengirim angka beserta tanda tangan saksi. Record
+   yang tidak valid akan revert.
+4. Dashboard menampilkan tally berjalan, selalu dengan **penyebut kelengkapan
+   pelaporan** (contoh: `42.318 / 820.000 TPS melapor — 5,2%`).
+5. Siapa pun bisa mengunduh record mentah, menghitung ulang total, dan
+   membandingkannya dengan rolling root on-chain.
 
-## Components
+## Komponen
 
-| Component | Responsibility |
+| Komponen | Tanggung jawab |
 | --- | --- |
-| `contracts/ElectionLedger.sol` | Invariant checks, on-chain tally, rolling audit root, role gating |
-| `scripts/deploy.js` | Deploy to a testnet |
-| `scripts/seed.js` | Load sample records and produce `data/seed.json` |
-| `web/` | Static dashboard + per-TPS verifier, reads the chain directly via `viem` |
-| `data/seed.json` | Public leaf set used by the verifier |
+| `contracts/ElectionLedger.sol` | Cek invariant, tally on-chain, rolling audit root, role gating |
+| `scripts/deploy.js` | Deploy ke testnet |
+| `scripts/seed.js` | Memuat record contoh dan menghasilkan `data/seed.json` |
+| `web/` | Dashboard statis + verifier per TPS, membaca chain langsung via `viem` |
+| `data/seed.json` | Leaf set publik yang dipakai verifier |
 
-## Record schema
+## Skema record
 
 ```solidity
 struct Result {
     bytes32 tpsId;
-    uint32  dpt;              // registered voters at this TPS
-    uint32  ballotsIssued;    // ballots handed out
+    uint32  dpt;              // pemilih terdaftar di TPS ini
+    uint32  ballotsIssued;    // surat suara yang dikeluarkan
     uint32  ballotsValid;
     uint32  ballotsInvalid;
-    uint32  abstain;          // legal outcome, not a residual
-    uint16[] votes;           // per candidate / party
-    bytes32 photoHash;        // keccak256 of the signed C-hasil photo
+    uint32  abstain;          // hasil yang sah, bukan sisa
+    uint16[] votes;           // per paslon / partai
+    bytes32 photoHash;        // keccak256 foto C-hasil yang ditandatangani
 }
 ```
 
-`abstain` is a first-class field. An election has a **ceiling** (eligible
-voters), never a target. Any design that requires turnout to hit an exact number
-must fabricate votes to reach it — which is the definition of the fraud it
-claims to prevent.
+`abstain` adalah field kelas satu. Pemilu punya **plafon** (pemilih eligible),
+tidak pernah punya target. Desain apa pun yang menuntut partisipasi mencapai
+angka persis harus memalsukan suara untuk mencapainya — dan itu justru definisi
+kecurangan yang diklaim ingin dicegah.
 
-## Invariants enforced on-chain
+## Invariant yang ditegakkan on-chain
 
 ```solidity
 ballotsValid + ballotsInvalid + abstain == ballotsIssued
@@ -114,70 +118,71 @@ ballotsIssued <= dpt
 sum(votes) == ballotsValid
 ```
 
-A record violating any of these **reverts at write time** and never enters the
-ledger. This is the strongest reason to use a ledger rather than a database: the
-rule is enforced by code, not by the honesty of the operator.
+Record yang melanggar salah satunya akan **revert saat penulisan** dan tidak
+pernah masuk ledger. Inilah alasan terkuat memakai ledger alih-alih database:
+aturannya ditegakkan oleh kode, bukan oleh kejujuran operator.
 
-The rolling root makes revisions visible:
+Rolling root membuat revisi terlihat:
 
 ```solidity
 rollingRoot = keccak256(abi.encode(rollingRoot, recordHash));
 ```
 
-Re-submitting a TPS appends a new version. The history of corrections stays
-readable — which reads as transparency rather than as tampering.
+Mengirim ulang satu TPS akan menambah versi baru. Riwayat koreksinya tetap bisa
+dibaca — dan itu terbaca sebagai transparansi, bukan sebagai kecurangan.
 
-> `shortcut:` a hash chain gives chronological integrity but O(n) inclusion
-> proofs. Upgrade to a Merkle tree / MMR if per-record proof size matters at
-> national scale.
+> `shortcut:` hash chain memberi integritas kronologis tapi inclusion proof-nya
+> O(n). Upgrade ke Merkle tree / MMR kalau ukuran proof per record jadi penting
+> pada skala nasional.
 
-## Why a ledger and not a database?
+## Kenapa ledger, bukan database?
 
-A database can prove *what it currently stores*. A ledger can prove that
-**nothing changed since a given time** — a claim that cannot be made by the party
-we are trying to verify. That is the entire justification. Everything else in
-this system (signatures, hashing, append-only storage) would work with plain
-infrastructure.
+Database bisa membuktikan **apa** yang tersimpan sekarang. Ledger bisa
+membuktikan bahwa **tidak ada yang berubah sejak waktu tertentu** — klaim yang
+tidak bisa dibuat oleh pihak yang justru sedang kita verifikasi. Itu satu-satunya
+justifikasi. Semua bagian lain dari sistem ini (tanda tangan, hashing, penyimpanan
+append-only) bisa jalan dengan infrastruktur biasa.
 
 ## Data
 
-`data/seed.json` is **synthetic** and labelled as such. It exists so the whole
-pipeline can be demonstrated end to end. Replace it with real C-hasil data
-before making any claim about accuracy.
+`data/seed.json` bersifat **sintetis** dan diberi label demikian. Tujuannya agar
+seluruh pipeline bisa didemokan end to end. Ganti dengan data C-hasil asli
+sebelum membuat klaim apa pun soal akurasi.
 
-## Non-goals
+## Yang Bukan Tujuan Proyek
 
-Written down on purpose — the boundaries are part of the design.
+Ditulis dengan sengaja — batasan adalah bagian dari desain.
 
-- **Vote buying.** The main defence against it is that a ballot in a closed
-  booth cannot be proven to anyone. Any system with a verifiable receipt lets the
-  buyer demand proof before paying. Traceable voting makes this worse, not
-  better.
-- **Remote / internet voting.** Same reason, plus client-side malware and the
-  digital divide.
-- **Truth of the source data.** If a form was filled in wrong, the ledger stores
-  the error immutably and with a valid signature. Garbage in, gospel out.
-- **Trustless operation.** Trust does not disappear; it moves — to the credential
-  issuer, the key holders, and the contract author. This is a shift, not a
-  removal.
+- **Politik uang.** Pertahanan utamanya justru karena surat suara di bilik
+  tertutup tidak bisa dibuktikan ke siapa pun. Sistem apa pun yang memberi bukti
+  terverifikasi akan dipakai pembeli suara untuk menagih sebelum membayar. Voting
+  yang bisa dilacak memperburuk ini, bukan memperbaikinya.
+- **Voting jarak jauh / internet.** Alasan yang sama, ditambah malware di sisi
+  klien dan kesenjangan digital.
+- **Kebenaran data sumber.** Kalau formulirnya sudah diisi salah, ledger
+  menyimpan kesalahan itu secara permanen dan dengan tanda tangan yang sah.
+  Garbage in, gospel out.
+- **Operasi tanpa kepercayaan.** Kepercayaan tidak hilang; ia berpindah — ke
+  penerbit kredensial, pemegang kunci, dan penulis kontrak. Ini pergeseran, bukan
+  penghapusan.
 
 ## Roadmap
 
-- [x] Problem framing, threat model, non-goals
-- [ ] `ElectionLedger.sol` + invariant tests
-- [ ] Witness multi-signature (`k`-of-`n` per record)
-- [ ] Rolling root + Merkle inclusion proofs
-- [ ] `seed.json` generation from sample data
-- [ ] Dashboard: live tally with reporting coverage
-- [ ] Per-TPS verifier page
-- [ ] Deploy to a public testnet + anchor tx hash in this README
-- [ ] Rolling root anchored to a public chain on a schedule
+- [x] Perumusan masalah, threat model, non-goals
+- [ ] `ElectionLedger.sol` + test invariant
+- [ ] Multi-tanda tangan saksi (`k`-of-`n` per record)
+- [ ] Rolling root + Merkle inclusion proof
+- [ ] Generasi `seed.json` dari data contoh
+- [ ] Dashboard: tally live dengan kelengkapan pelaporan
+- [ ] Halaman verifier per TPS
+- [ ] Deploy ke testnet publik + tx hash anchor di README ini
+- [ ] Rolling root di-anchor ke chain publik secara berkala
 
 ## Tech stack
 
-Solidity `^0.8.24` · Hardhat · `viem` · static frontend (no backend; the
-dashboard reads chain state directly).
+Solidity `^0.8.24` · Hardhat · `viem` · frontend statis (tanpa backend;
+dashboard membaca state chain langsung).
 
-## License
+## Lisensi
 
 MIT
